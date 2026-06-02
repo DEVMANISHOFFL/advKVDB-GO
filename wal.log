@@ -1,13 +1,2 @@
-{"Cmd":"SET","Key":"manish","Value":"dewangan"}
-
-{"Cmd":"SET","Key":"user-1","Value":"manish"}
-{"Cmd":"SET","Key":"user-1","Value":"manish"}
-{"Cmd":"DELETE","Key":"manish","Value":""}
-{"Cmd":"SET","Key":"user-1","Value":"manish"}
-{"Cmd":"DELETE","Key":"manish","Value":""}
-{"Cmd":"SET","Key":"user-1","Value":"manish"}
-{"Cmd":"DELETE","Key":"manish","Value":""}
-{"Cmd":"SET","Key":"user-1","Value":"manish"}
-{"Cmd":"DELETE","Key":"manish","Value":""}
-{"Cmd":"SET","Key":"user-1","Value":"manish"}
-{"Cmd":"DELETE","Key":"user-1","Value":""}
+{"Cmd":"SET","Key":"user1","Value":"manish"}
+{"Cmd":"SET","Key":"user2","Value":"manishdevoffl"}

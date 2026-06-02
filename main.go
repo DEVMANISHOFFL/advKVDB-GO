@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"sync"
 )
 
 type LogEntry struct {
@@ -15,6 +16,7 @@ type LogEntry struct {
 
 type Store struct {
 	m   map[string]string
+	mu  sync.RWMutex
 	wal *os.File
 }
 
@@ -30,6 +32,7 @@ func NewStore() (*Store, error) {
 }
 
 func (s *Store) Replay() error {
+
 	file, err := os.Open("wal.log")
 	if err != nil {
 		return err
@@ -59,7 +62,8 @@ func (s *Store) Replay() error {
 }
 
 func (s *Store) Set(key, val string) error {
-
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	entry := LogEntry{
 		Cmd:   "SET",
 		Key:   key,
@@ -70,20 +74,21 @@ func (s *Store) Set(key, val string) error {
 	if err != nil {
 		return err
 	}
-	s.wal.Sync()
 	if _, err := s.wal.Write(bytes); err != nil {
 		return err
 	}
 	if _, err := s.wal.WriteString("\n"); err != nil {
 		return err
 	}
+	s.wal.Sync()
 
 	s.m[key] = val
 	return nil
 }
 
 func (s *Store) Get(key string) (string, bool) {
-
+	s.mu.RLock()
+	defer s.mu.RUnlock()
 	if val, ok := s.m[key]; ok {
 		return val, ok
 	}
@@ -91,7 +96,8 @@ func (s *Store) Get(key string) (string, bool) {
 }
 
 func (s *Store) Delete(key string) (bool, error) {
-
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	entry := LogEntry{
 		Cmd: "DELETE",
 		Key: key,
@@ -102,14 +108,16 @@ func (s *Store) Delete(key string) (bool, error) {
 		return false, err
 	}
 
-	s.wal.Sync()
-
 	if _, err := s.wal.Write(bytes); err != nil {
 		return false, err
 	}
 	if _, err := s.wal.WriteString("\n"); err != nil {
 		return false, err
 	}
+	// Calling s.wal.Sync() triggers an fsync system call. This bypasses the Page Cache and forces the mechanical
+	// hard drive or SSD to physically record the data before the function returns. It is much slower, but it guarantees
+	// durability.
+	s.wal.Sync()
 
 	if _, ok := s.m[key]; ok {
 		delete(s.m, key)
@@ -127,10 +135,10 @@ func main() {
 	store.Replay()
 
 	store.Set("user-1", "manish")
-
+	store.Set("user-2", "hello\nworld")
 	store.Delete("user-1")
 
-	if val, ok := store.Get("user-1"); ok {
+	if val, ok := store.Get("user-2"); ok {
 		fmt.Println(val)
 	} else {
 		fmt.Println("key not found")
