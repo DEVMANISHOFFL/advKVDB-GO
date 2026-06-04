@@ -96,6 +96,45 @@ func (sl *Skiplist) Search(key string) (string, bool) {
 
 }
 
+func (sl *Skiplist) Delete(key string) bool {
+	update := make([]*Node, maxLevel)
+	current := sl.Head
+
+	// Find predecessors at each level
+	for i := sl.Level; i >= 0; i-- {
+		for current.Next[i] != nil && current.Next[i].Key < key {
+			current = current.Next[i]
+		}
+		update[i] = current
+	}
+
+	// Candidate node
+	current = current.Next[0]
+
+	// Key doesn't exist
+	if current == nil || current.Key != key {
+		return false
+	}
+
+	// Rewire pointers
+	for i := 0; i <= sl.Level; i++ {
+		if update[i].Next[i] != current {
+			break
+		}
+
+		update[i].Next[i] = current.Next[i]
+	}
+
+	// Shrink skiplist height if top levels become empty
+	for sl.Level > 0 && sl.Head.Next[sl.Level] == nil {
+		sl.Level--
+	}
+
+	sl.Size--
+
+	return true
+}
+
 type Iterator struct {
 	current *Node
 }

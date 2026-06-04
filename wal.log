@@ -1,2 +1,3 @@
-{"Cmd":"SET","Key":"user1","Value":"manish"}
-{"Cmd":"SET","Key":"user2","Value":"manishdevoffl"}
+{"Cmd":"SET","Key":"manishdevoffl2","Value":"testing flush2"}
+{"Cmd":"SET","Key":"manishdevoffl3","Value":"testing flush3"}
+{"Cmd":"SET","Key":"manishdevoffl4","Value":"testing flush4"}

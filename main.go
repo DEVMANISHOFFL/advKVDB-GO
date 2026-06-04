@@ -8,6 +8,8 @@ import (
 	"sync"
 )
 
+const MEMTABLE_SIZE = 4
+
 type LogEntry struct {
 	Cmd   string
 	Key   string
@@ -15,19 +17,24 @@ type LogEntry struct {
 }
 
 type Store struct {
-	m   map[string]string
-	mu  sync.RWMutex
-	wal *os.File
+	mu       sync.RWMutex
+	wal      *os.File
+	memtable *Skiplist
+	sstable  *os.File
 }
 
 func NewStore() (*Store, error) {
 	file, err := os.OpenFile("wal.log", os.O_APPEND|os.O_CREATE|os.O_RDWR, 0664)
+	sstableFile, err := os.OpenFile("sst-0001.db", os.O_CREATE|os.O_RDWR, 0664)
+
 	if err != nil {
 		return nil, fmt.Errorf("error opening wal.log")
 	}
 	return &Store{
-		m:   make(map[string]string),
-		wal: file,
+		wal:      file,
+		memtable: NewSkiplist(),
+		mu:       sync.RWMutex{},
+		sstable:  sstableFile,
 	}, nil
 }
 
@@ -50,11 +57,11 @@ func (s *Store) Replay() error {
 		}
 
 		if entry.Cmd == "SET" {
-			s.m[entry.Key] = entry.Value
+			s.memtable.Insert(entry.Key, entry.Value)
 		}
 
 		if entry.Cmd == "DELETE" {
-			delete(s.m, entry.Key)
+			s.memtable.Delete(entry.Key)
 		}
 
 	}
@@ -80,19 +87,31 @@ func (s *Store) Set(key, val string) error {
 	if _, err := s.wal.WriteString("\n"); err != nil {
 		return err
 	}
-	s.wal.Sync()
+	if err := s.wal.Sync(); err != nil {
+		return err
+	}
+	s.memtable.Insert(entry.Key, entry.Value)
 
-	s.m[key] = val
+	if s.memtable.Size >= MEMTABLE_SIZE {
+		return s.Flush()
+	}
+
 	return nil
 }
 
-func (s *Store) Get(key string) (string, bool) {
+func (s *Store) Get(key string) (string, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	if val, ok := s.m[key]; ok {
-		return val, ok
+	val, ok := s.memtable.Search(key)
+	if !ok {
+		val, err := s.SSTReader(key)
+		if err != nil {
+			return "key not found in sstable", err
+		}
+		return val, nil
 	}
-	return "", false
+
+	return val, nil
 }
 
 func (s *Store) Delete(key string) (bool, error) {
@@ -117,10 +136,10 @@ func (s *Store) Delete(key string) (bool, error) {
 	// Calling s.wal.Sync() triggers an fsync system call. This bypasses the Page Cache and forces the mechanical
 	// hard drive or SSD to physically record the data before the function returns. It is much slower, but it guarantees
 	// durability.
-	s.wal.Sync()
-
-	if _, ok := s.m[key]; ok {
-		delete(s.m, key)
+	if err := s.wal.Sync(); err != nil {
+		return false, err
+	}
+	if ok := s.memtable.Delete(key); ok {
 		return true, nil
 	}
 	return false, nil
@@ -134,14 +153,17 @@ func main() {
 
 	store.Replay()
 
-	store.Set("user-1", "manish")
-	store.Set("user-2", "hello\nworld")
-	store.Delete("user-1")
+	// for i := range 100 {
+	// 	k, v := fmt.Sprintf("user-%d", i), fmt.Sprintf("pass-%d", i%3)
+	// 	store.Set(k, v)
+	// }
 
-	if val, ok := store.Get("user-2"); ok {
-		fmt.Println(val)
-	} else {
-		fmt.Println("key not found")
-	}
+	store.Set("manishdevoffl1", "testing flush1")
+	store.Set("manishdevoffl2", "testing flush2")
+	store.Set("manishdevoffl3", "testing flush3")
+	store.Set("manishdevoffl4", "testing flush4")
 
+	op, _ := store.Get("manishdevoffl2")
+
+	fmt.Println(op)
 }
