@@ -1,3 +1,16 @@
-{"Cmd":"SET","Key":"manishdevoffl2","Value":"testing flush2"}
-{"Cmd":"SET","Key":"manishdevoffl3","Value":"testing flush3"}
-{"Cmd":"SET","Key":"manishdevoffl4","Value":"testing flush4"}
+{"Cmd":"SET","Key":"user-99","Value":"pass-0"}
+{"Cmd":"DELETE","Key":"user-30","Value":""}
+{"Cmd":"DELETE","Key":"user-30","Value":""}
+{"Cmd":"DELETE","Key":"user-30","Value":""}
+{"Cmd":"DELETE","Key":"user-30","Value":"__DELETED__"}
+{"Cmd":"SET","Key":"user-30","Value":"pass-0"}
+{"Cmd":"DELETE","Key":"user-30","Value":"__DELETED__"}
+{"Cmd":"DELETE","Key":"user-30","Value":"__DELETED__"}
+{"Cmd":"DELETE","Key":"user-30","Value":"__DELETED__"}
+{"Cmd":"DELETE","Key":"user-30","Value":"__DELETED__"}
+{"Cmd":"DELETE","Key":"user-30","Value":"__DELETED__"}
+{"Cmd":"DELETE","Key":"user-30","Value":"__DELETED__"}
+{"Cmd":"DELETE","Key":"user-30","Value":"__DELETED__"}
+{"Cmd":"DELETE","Key":"user-30","Value":"__DELETED__"}
+{"Cmd":"DELETE","Key":"user-30","Value":"__DELETED__"}
+{"Cmd":"DELETE","Key":"user-30","Value":"__DELETED__"}

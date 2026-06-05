@@ -9,23 +9,30 @@ import (
 )
 
 const MEMTABLE_SIZE = 4
+const TOMBSTONE = "__DELETED__"
 
 type LogEntry struct {
 	Cmd   string
 	Key   string
 	Value string
 }
+type SSTable struct {
+	ID       int
+	Filename string
+	File     *os.File
+}
 
 type Store struct {
-	mu       sync.RWMutex
-	wal      *os.File
-	memtable *Skiplist
-	sstable  *os.File
+	mu          sync.RWMutex
+	wal         *os.File
+	memtable    *Skiplist
+	sstables    []*SSTable
+	nextTableID int
 }
 
 func NewStore() (*Store, error) {
+
 	file, err := os.OpenFile("wal.log", os.O_APPEND|os.O_CREATE|os.O_RDWR, 0664)
-	sstableFile, err := os.OpenFile("sst-0001.db", os.O_CREATE|os.O_RDWR, 0664)
 
 	if err != nil {
 		return nil, fmt.Errorf("error opening wal.log")
@@ -34,7 +41,7 @@ func NewStore() (*Store, error) {
 		wal:      file,
 		memtable: NewSkiplist(),
 		mu:       sync.RWMutex{},
-		sstable:  sstableFile,
+		sstables: make([]*SSTable, 0),
 	}, nil
 }
 
@@ -102,24 +109,45 @@ func (s *Store) Set(key, val string) error {
 func (s *Store) Get(key string) (string, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
+
 	val, ok := s.memtable.Search(key)
-	if !ok {
-		val, err := s.SSTReader(key)
-		if err != nil {
-			return "key not found in sstable", err
+
+	if ok {
+		if val == TOMBSTONE {
+			return "key not found", nil
 		}
+
 		return val, nil
 	}
 
-	return val, nil
+	for i := len(s.sstables) - 1; i >= 0; i-- {
+		val, err, ok := s.SSTReader(s.sstables[i], key)
+
+		if err != nil {
+			return "", err
+		}
+
+		if !ok {
+			continue
+		}
+
+		if val == TOMBSTONE {
+			return "key not found", nil
+		}
+
+		return val, nil
+	}
+
+	return "key not found", nil
 }
 
 func (s *Store) Delete(key string) (bool, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	entry := LogEntry{
-		Cmd: "DELETE",
-		Key: key,
+		Cmd:   "DELETE",
+		Key:   key,
+		Value: TOMBSTONE,
 	}
 
 	bytes, err := json.Marshal(entry)
@@ -139,9 +167,7 @@ func (s *Store) Delete(key string) (bool, error) {
 	if err := s.wal.Sync(); err != nil {
 		return false, err
 	}
-	if ok := s.memtable.Delete(key); ok {
-		return true, nil
-	}
+	s.memtable.Insert(key, TOMBSTONE)
 	return false, nil
 }
 
@@ -153,17 +179,15 @@ func main() {
 
 	store.Replay()
 
+	if err := store.LoadSSTable(); err != nil {
+		panic(err)
+	}
 	// for i := range 100 {
 	// 	k, v := fmt.Sprintf("user-%d", i), fmt.Sprintf("pass-%d", i%3)
 	// 	store.Set(k, v)
 	// }
-
-	store.Set("manishdevoffl1", "testing flush1")
-	store.Set("manishdevoffl2", "testing flush2")
-	store.Set("manishdevoffl3", "testing flush3")
-	store.Set("manishdevoffl4", "testing flush4")
-
-	op, _ := store.Get("manishdevoffl2")
+	store.Delete("user-30")
+	op, _ := store.Get("user-30")
 
 	fmt.Println(op)
 }
