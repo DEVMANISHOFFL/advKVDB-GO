@@ -169,7 +169,6 @@ Building a database from scratch removes modern framework layers. It makes an en
 - **Durability & Torn Writes (WAL):** To withstand power losses without damaging data, all writes are added sequentially to a Write-Ahead Log (WAL) before they are confirmed. To guard against "torn writes" (where a physical disk sector is only partially written during a crash), the WAL ensures strict serialization.
 - **Solving Read Amplification (Bloom Filters):** The main downside of an LSM tree is that reading a key might require scanning multiple files. To avoid costly disk seeks for non-existent keys, KVDB creates a Bloom Filter for each SSTable. This mathematically guarantees that if a key is absent, the system can skip unnecessary I/O. If a key is present, a sparse index maps it directly to its disk offset. 
 - **The Compaction Tax:** Because LSM trees are append-only, deletes are stored as tombstones. To avoid running out of disk space and to maintain read speeds, a background goroutine performs Leveled Compaction. It continuously merges overlapping SSTables and removes tombstones, carefully balancing the process to prevent stalling the main ingestion thread.
-- **Data Partitioning (Sharding):** To scale horizontally and avoid global lock contention, data is divided into distinct partitions using an FNV-based hashing algorithm. This ensures an even distribution of the dataset and allows parallel operations across independent shards.
 
 ### Summary of Engineering Principles
 
