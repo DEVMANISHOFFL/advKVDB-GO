@@ -2,6 +2,8 @@ package main
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
 	"testing"
 )
 
@@ -10,6 +12,13 @@ func TestCompaction(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+
+	files, _ := filepath.Glob("sst-*.db")
+	for _, f := range files {
+		os.Remove(f)
+	}
+
+	os.Remove("wal.log")
 
 	store.Set("a", "1")
 	store.Set("b", "2")

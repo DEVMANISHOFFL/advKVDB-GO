@@ -23,20 +23,24 @@ func (s *Store) Flush() error {
 		return err
 	}
 
+	filter := NewBloomFilter(s.memtable.Size, 0.01)
+
 	table := &SSTable{
 		ID:       id,
 		Filename: filename,
 		File:     file,
+		Filter:   filter,
 	}
 
 	s.sstables = append(s.sstables, table)
 
 	currentOffset := uint32(0)
 	var indexBuffer []byte
-
 	for it.Next() {
 		key := it.Key()
 		val := it.Value()
+
+		filter.Add(key)
 
 		keyLen := uint16(len(key))
 		valLen := uint32(len(val))
@@ -45,7 +49,6 @@ func (s *Store) Flush() error {
 		indexEntrySize := 2 + 4 + int(keyLen)
 
 		buf := make([]byte, totalSize)
-
 		idx := make([]byte, indexEntrySize)
 
 		offset := 0
@@ -75,22 +78,38 @@ func (s *Store) Flush() error {
 	}
 
 	indexStartOffset := currentOffset
+	indexSize := uint32(len(indexBuffer))
 
 	if _, err := table.File.Write(indexBuffer); err != nil {
 		return err
 	}
+	currentOffset += indexSize
 
-	footer := make([]byte, 8)
+	bloomStartOffset := currentOffset
 
-	binary.LittleEndian.PutUint32(
-		footer[0:4],
-		indexStartOffset,
-	)
+	bloomBufferSize := 8 + 8 + (len(filter.bitset) * 8)
+	bloomBuf := make([]byte, bloomBufferSize)
 
-	binary.LittleEndian.PutUint32(
-		footer[4:8],
-		uint32(len(indexBuffer)),
-	)
+	binary.LittleEndian.PutUint64(bloomBuf[0:8], uint64(filter.m))
+	binary.LittleEndian.PutUint64(bloomBuf[8:16], uint64(filter.k))
+
+	bOffset := 16
+	for _, val := range filter.bitset {
+		binary.LittleEndian.PutUint64(bloomBuf[bOffset:bOffset+8], val)
+		bOffset += 8
+	}
+
+	if _, err := table.File.Write(bloomBuf); err != nil {
+		return err
+	}
+	bloomSize := uint32(len(bloomBuf))
+
+	footer := make([]byte, 16)
+
+	binary.LittleEndian.PutUint32(footer[0:4], indexStartOffset)
+	binary.LittleEndian.PutUint32(footer[4:8], indexSize)
+	binary.LittleEndian.PutUint32(footer[8:12], bloomStartOffset)
+	binary.LittleEndian.PutUint32(footer[12:16], bloomSize)
 
 	if _, err := table.File.Write(footer); err != nil {
 		return err

@@ -24,6 +24,7 @@ type SSTable struct {
 	ID       int
 	Filename string
 	File     *os.File
+	Filter   *BloomFilters
 }
 
 type Store struct {
@@ -138,7 +139,7 @@ func (s *Store) Set(key, val string) error {
 
 }
 
-func (s *Store) Get(key string) (string, error) {
+func (s *Store) Get(key string) (string, bool) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
@@ -146,17 +147,25 @@ func (s *Store) Get(key string) (string, error) {
 
 	if ok {
 		if val == TOMBSTONE {
-			return "key not found", nil
+			return "key not found", false
 		}
 
-		return val, nil
+		return val, true
 	}
 
 	for i := len(s.sstables) - 1; i >= 0; i-- {
+
+		table := s.sstables[i]
+
+		if table.Filter != nil &&
+			!table.Filter.MightContain(key) {
+			continue
+		}
+
 		val, err, ok := s.SSTReader(s.sstables[i], key)
 
 		if err != nil {
-			return "", err
+			return "", false
 		}
 
 		if !ok {
@@ -164,13 +173,13 @@ func (s *Store) Get(key string) (string, error) {
 		}
 
 		if val == TOMBSTONE {
-			return "key not found", nil
+			return "key not found", false
 		}
 
-		return val, nil
+		return val, true
 	}
 
-	return "key not found", nil
+	return "key not found", false
 }
 
 func (s *Store) Delete(key string) (bool, error) {
@@ -211,45 +220,11 @@ func (s *Store) Delete(key string) (bool, error) {
 func main() {
 	store, err := NewStore()
 	if err != nil {
-		panic(err)
+		panic(fmt.Sprintf("Failed to initiate database: %v", err))
 	}
 
-	// Load existing SSTables from disk
-	if err := store.LoadSSTable(); err != nil {
-		panic(err)
-	}
-
-	// Force a flush by exceeding MEMTABLE_SIZE
-	store.Set("cat", "animal")
-	store.Set("dog", "pet")
-	store.Set("apple", "fruit")
-	store.Set("zebra", "stripes")
-	store.Set("golang", "awesome")
-	store.Set("rust", "fast")
-	store.Set("java", "verbose")
-	store.Set("python", "easy")
-	fmt.Println("Flush completed")
-
-	// Clear memtable to force SSTable lookup
-	store.memtable = NewSkiplist()
-
-	tests := []string{
-		"cat",
-		"dog",
-		"apple",
-		"zebra",
-		"golang",
-		"notfound",
-	}
-
-	for _, key := range tests {
-		val, err := store.Get(key)
-
-		if err != nil {
-			fmt.Printf("%s -> ERROR: %v\n", key, err)
-			continue
-		}
-
-		fmt.Printf("%s -> %s\n", key, val)
+	server := NewHTTPServer(store, 8080)
+	if err := server.Start(); err != nil {
+		panic(fmt.Sprintf("Server crashed: %v", err))
 	}
 }
