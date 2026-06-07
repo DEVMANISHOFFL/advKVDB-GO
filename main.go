@@ -214,22 +214,42 @@ func main() {
 		panic(err)
 	}
 
-	store.Replay()
-
+	// Load existing SSTables from disk
 	if err := store.LoadSSTable(); err != nil {
 		panic(err)
 	}
-	// for i := range 100 {
-	// 	k, v := fmt.Sprintf("user-%d", i), fmt.Sprintf("pass-%d", i%3)
-	// 	store.Set(k, v)
-	// }
 
-	// store.Set("survivor", "this data survived a crash")
-	// store.Delete("survivor")
-	val, _ := store.Get("survivor")
-	// store.memtable.Delete("survivor")
-	fmt.Println(val)
-	// op, _ := store.Get("user-30")
+	// Force a flush by exceeding MEMTABLE_SIZE
+	store.Set("cat", "animal")
+	store.Set("dog", "pet")
+	store.Set("apple", "fruit")
+	store.Set("zebra", "stripes")
+	store.Set("golang", "awesome")
+	store.Set("rust", "fast")
+	store.Set("java", "verbose")
+	store.Set("python", "easy")
+	fmt.Println("Flush completed")
 
-	// fmt.Println(op)
+	// Clear memtable to force SSTable lookup
+	store.memtable = NewSkiplist()
+
+	tests := []string{
+		"cat",
+		"dog",
+		"apple",
+		"zebra",
+		"golang",
+		"notfound",
+	}
+
+	for _, key := range tests {
+		val, err := store.Get(key)
+
+		if err != nil {
+			fmt.Printf("%s -> ERROR: %v\n", key, err)
+			continue
+		}
+
+		fmt.Printf("%s -> %s\n", key, val)
+	}
 }
